@@ -1,0 +1,485 @@
+#include "ExN03DetectorConstruction.hh"
+
+#include <fstream>
+using namespace std;
+
+#include "G4Material.hh"
+#include "G4Element.hh"
+#include "G4Isotope.hh"
+
+#include "G4Box.hh"
+#include "G4LogicalVolume.hh"
+#include "G4PVPlacement.hh"
+#include "G4VPhysicalVolume.hh"
+#include "G4Tubs.hh"
+
+#include "G4Transform3D.hh"
+#include "G4GeometryManager.hh"
+#include "G4PhysicalVolumeStore.hh"
+#include "G4LogicalVolumeStore.hh"
+#include "G4SolidStore.hh"
+
+#include "G4VisAttributes.hh"
+#include "G4Colour.hh"
+#include "G4NistManager.hh"
+#include <vector>
+
+/*To do:
+Debug
+*/
+
+ExN03DetectorConstruction::ExN03DetectorConstruction()
+{
+ world_phys=0;
+ box_phys=0;
+ crete_phys1a=0;
+ crete_phys1b=0;
+ crete_phys2a=0;
+ crete_phys2b=0;
+ crete_phys3=0;
+ for(int i=0;i<4;++i) {
+  holes_phys[i]=0;
+  tubes_phys[i]=0;
+  counters_phys[i]=0;
+ };
+//World should be at least bigger than the system
+ worldsize=3*CLHEP::m;
+}
+
+ExN03DetectorConstruction::~ExN03DetectorConstruction() {}
+
+
+
+G4VPhysicalVolume* ExN03DetectorConstruction::Construct()
+{
+  return ConstructCounter();
+}
+
+
+
+G4VPhysicalVolume* ExN03DetectorConstruction::ConstructCounter()
+{
+
+  // Clean old geometry, if any
+  //
+    G4GeometryManager::GetInstance()->OpenGeometry();
+    G4PhysicalVolumeStore::GetInstance()->Clean();
+    G4LogicalVolumeStore::GetInstance()->Clean();
+    G4SolidStore::GetInstance()->Clean();
+
+  // Import detector geometry and fill gas specifications
+  ///////////////////////////////////////////////////////////
+    ifstream geometry("geometry.dat");
+    G4double boxh,countr,counth,countd,boxs,He3Pressure,CounterVolume,He3Moles,He3Density,R,pi;
+
+    R = 0.08206;
+    pi = 3.141596;
+    geometry >> boxh;
+    geometry >> boxs;
+    geometry >> countd;
+    geometry >> countr;
+    geometry >> counth;
+    geometry >> He3Pressure;
+
+  //Water parameters (cm)
+    G4double WaterR, WaterH, WaterVolume;
+
+    WaterR = (59/2)*2.54*CLHEP::cm;
+    WaterH = (59)*2.54*CLHEP::cm;
+
+  //Detector parameters (cm)
+    G4double DetectorHolderL, DetectorWireL, DetectorTubeL, DetectorHe3L, DetectorwhiteElecL, DetectornonwhiteElecL;
+
+    DetectorHolderL = (73.66/2);
+    DetectorWireL = (42.2656/2);
+    DetectorHe3L = (38.608/2);
+    DetectorTubeL = (42.2656/2);
+    DetectornonwhiteElecL = (6.6675/2);
+    DetectorwhiteElecL = (9.525/2);
+
+
+  // Calculate necessary parameters -- units are Liters and Atmospheres
+  ////////////////////////////////////////////////////////////////////////
+  //Detector Distances
+    G4double DetSet,Detdist,DetHolderheight;
+    DetSet = 7; // This is the distance setting in inches for the detectors
+    Detdist = (DetSet*2.54+1)*CLHEP::cm; // This is the real distance from the center of the tank in cm
+    DetHolderheight = 65.8622*CLHEP::cm; // This is the height difference from center of water to center of detholder (formerly 54.0937)
+  //Water Construction
+    WaterVolume = pi*pow(WaterR,2)*WaterH/1000; // V in L
+
+  //jb-20160519  CounterVolume = pi*pow(countr,2)*counth*1000;
+    CounterVolume = 2*pi*pow(countr,2)*counth/1000; // V in L
+    He3Moles = He3Pressure*CounterVolume/(R*298);
+    He3Density = He3Pressure*1000*3.016/(R*298); // density in g/m^3
+    G4cout<< "Density of He-3 gas in counter (g/m^3) is "<< He3Density<<G4endl;
+    G4cout << " box height " << boxh << G4endl;
+    G4cout << " box width " << boxs << G4endl;
+    G4cout << " counter distance " << countd << G4endl;
+    G4cout << " counter radius " << countr << G4endl;
+    G4cout << " counter height " << counth << G4endl;
+    G4cout << " gas pressure " << He3Pressure << G4endl;
+  //make materials
+  ///////////////////////////////////////////////////////////
+    G4int nelements;
+    G4double density,a,z;
+    G4String name,symbol;
+
+
+  G4NistManager* man = G4NistManager::Instance();
+  //Air
+  G4Material* air = man->FindOrBuildMaterial("G4_AIR");
+
+  //PET
+  G4Material* pet = man->FindOrBuildMaterial("G4_POLYETHYLENE");
+
+  //Aluminum
+  G4Element* Al = new G4Element(name="Aluminum",symbol="Cu",z=13,a=26.982*CLHEP::g/CLHEP::mole);
+  G4Material* Aluminum = new G4Material(name="Aluminum",density=2.7*CLHEP::g/CLHEP::cm3,nelements=1);
+  Aluminum->AddElement(Al,100*CLHEP::perCent);
+
+  //Water
+  G4Material* h2o =  man->FindOrBuildMaterial("G4_WATER"); //Check if correct
+
+  //Brass
+  G4Element* Cu = new G4Element(name="Copper",symbol="Cu",z=29,a=63.546*CLHEP::g/CLHEP::mole);
+  G4Element* Zn = new G4Element(name="Zinc",symbol="Zn",z=30,a=65.38*CLHEP::g/CLHEP::mole);
+  G4Material* Brass = new G4Material(name="Brass",density=8.5*CLHEP::g/CLHEP::cm3,nelements=2);
+  Brass->AddElement(Cu,70*CLHEP::perCent);
+  Brass->AddElement(Zn,30*CLHEP::perCent);
+
+  //PTFE
+  a=3.0160293*CLHEP::g/CLHEP::mole;
+  G4Element* C = new G4Element(name="Carbon",symbol="C",z=6,a=12.011*CLHEP::g/CLHEP::mole);
+  G4Element* F = new G4Element(name="Fluorine",symbol="F",z=9,a=18.998*CLHEP::g/CLHEP::mole);
+  G4Material* PTFE = new G4Material(name="PTFE",density=2.20*CLHEP::g/CLHEP::cm3,nelements=2);
+  PTFE->AddElement(C,24.0183*CLHEP::perCent);
+  PTFE->AddElement(F,75.9817*CLHEP::perCent);
+
+  // He3
+  a=3.0160293*CLHEP::g/CLHEP::mole;
+  G4Isotope* He3 = new G4Isotope(name="He3",2,3,a);
+  G4Element* myHe = new G4Element(name="myHe",symbol="myHe",nelements=1);
+  myHe->AddIsotope(He3,100.*CLHEP::perCent);
+
+  // Mixed product -- Fill + He3
+  G4Material* CounterGas = new G4Material(name="CounterGas",density=He3Density*CLHEP::g/CLHEP::m3,nelements=1,kStateGas,298.*CLHEP::kelvin,He3Pressure*CLHEP::atmosphere);
+  CounterGas->AddElement(myHe,100*CLHEP::perCent);
+
+  //SS for the tube walls
+  G4Element* Fe = new G4Element(name="Iron",symbol="Fe",z=26,a=55.845*CLHEP::g/CLHEP::mole);
+  G4Element* Ni = new G4Element(name="Nickel",symbol="Ni",28,58.693*CLHEP::g/CLHEP::mole);
+  G4Element* Cr = new G4Element(name="Chromium",symbol="Cr",24,51.996*CLHEP::g/CLHEP::mole);
+  G4Material* SS = new G4Material(name="Stainless",density=7.87*CLHEP::g/CLHEP::cm3,nelements=3);
+  SS->AddElement(Fe,71.*CLHEP::perCent);
+  SS->AddElement(Cr,19.*CLHEP::perCent);
+  SS->AddElement(Ni,10.*CLHEP::perCent);
+
+  //Electronics
+  /*
+  Hydrogen
+  Carbon
+  Copper
+  Total Guesses
+  */
+  G4Element* H = new G4Element(name="Hydrogen",symbol="H",z=1,a=1.008*CLHEP::g/CLHEP::mole);
+  G4Material* Elec = new G4Material(name="Electronics",density=3.00*CLHEP::g/CLHEP::cm3,nelements=3);
+  Elec->AddElement(H,25.*CLHEP::perCent);
+  Elec->AddElement(C,54.*CLHEP::perCent);
+  Elec->AddElement(Cu,21.*CLHEP::perCent);
+  /////////////////////////////////////////////////////////////
+
+
+  //make objects
+  //////////////////////////////////////////////////////////////
+
+  //world
+
+    G4Box* world_solid = new G4Box("world_solid",worldsize,worldsize,worldsize);
+    G4LogicalVolume* world_log = new G4LogicalVolume(world_solid,air,"world_log");
+    world_phys = new G4PVPlacement(0,G4ThreeVector(0,0,0),world_log,"world_phys",0,false,0);
+  // Detector Dimensions imported above
+  /*  G4double box_height = boxh*CLHEP::cm;
+    G4double box_side = boxs*CLHEP::cm;
+    G4double wall_hthick = 0.5*CLHEP::mm;
+    G4double counter_radius = countr*CLHEP::cm;
+    G4double counter_hheight = counth*CLHEP::cm;
+    G4double counter_dist = countd*CLHEP::cm;*/
+
+  /*Cylinder Construction Formatting
+  G4VSolid* <name> = new G4Tubs("name", inner radius, outer radius, height from center, angular start, angular end)
+  G4LogicalVolume* <name> = new G4LogicalVolume(SolidConstruct, material, "name")
+  G4VPhysicalVolume* <name> = new G4PVPlacement(0,G4ThreeVector(x,y,z),Logical Volume,"name",0,false,0)
+  */
+  //Water
+    G4VSolid* Water_solid = new G4Tubs("Water_solid", 0*CLHEP::cm, (149.86/2)*CLHEP::cm,149.86/2*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* Water_log = new G4LogicalVolume(Water_solid,h2o,"Water_log");
+    G4VPhysicalVolume* Water_phys = new G4PVPlacement(0,G4ThreeVector(0,0,0),Water_log,"Water_phys",world_log,0,false,0);
+
+  // Add placements
+
+  //Detector holder 1
+    G4VSolid* DetHolder_solid1 = new G4Tubs("DetHolder_solid1", (2.69875/2)*CLHEP::cm, 1.5875*CLHEP::cm,DetectorHolderL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetHolder_log1 = new G4LogicalVolume(DetHolder_solid1,SS,"DetHolder_log1");
+    G4VPhysicalVolume* DetHolder_phys1 = new G4PVPlacement(0,G4ThreeVector(0,Detdist,DetHolderheight),DetHolder_log1,"DetHolder_phys1",Water_log,0,false,0);
+
+  //Detector holder 2
+    G4VSolid* DetHolder_solid2 = new G4Tubs("DetHolder_solid2", (2.69875/2)*CLHEP::cm, 1.5875*CLHEP::cm,DetectorHolderL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetHolder_log2 = new G4LogicalVolume(DetHolder_solid2,SS,"DetHolder_log2");
+    G4VPhysicalVolume* DetHolder_phys2 = new G4PVPlacement(0,G4ThreeVector(Detdist,0,DetHolderheight),DetHolder_log2,"DetHolder_phys2",Water_log,0,false,0);
+
+  //Detector holder 3
+    G4VSolid* DetHolder_solid3 = new G4Tubs("DetHolder_solid3", (2.69875/2)*CLHEP::cm, 1.5875*CLHEP::cm,DetectorHolderL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetHolder_log3 = new G4LogicalVolume(DetHolder_solid3,SS,"DetHolder_log3");
+    G4VPhysicalVolume* DetHolder_phys3 = new G4PVPlacement(0,G4ThreeVector(0,-Detdist,DetHolderheight),DetHolder_log3,"DetHolder_phys3",Water_log,0,false,0);
+
+  //Detector holder 4
+    G4VSolid* DetHolder_solid4 = new G4Tubs("DetHolder_solid4", (2.69875/2)*CLHEP::cm, 1.5875*CLHEP::cm,DetectorHolderL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetHolder_log4 = new G4LogicalVolume(DetHolder_solid4,SS,"DetHolder_log4");
+    G4VPhysicalVolume* DetHolder_phys4 = new G4PVPlacement(0,G4ThreeVector(-Detdist,0,DetHolderheight),DetHolder_log4,"DetHolder_phys4",Water_log,0,false,0);
+
+
+
+
+  //Non-white detector 1
+    G4VSolid* DetTube_solid1 = new G4Tubs("DetTube_solid1", 1.18872*CLHEP::cm, 1.27*CLHEP::cm,DetectorTubeL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetTube_log1 = new G4LogicalVolume(DetTube_solid1,Aluminum,"DetTube_log1");
+
+    G4VSolid* DetElec_solid1 = new G4Tubs("DetElec_solid1", 0*CLHEP::cm, 1.27*CLHEP::cm,DetectornonwhiteElecL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetElec_log1 = new G4LogicalVolume(DetElec_solid1,Elec,"DetElec_log1");
+
+    G4VSolid* DetHe3_solid1 = new G4Tubs("DetHe3_solid1", 0*CLHEP::cm, (1.27-0.08128)*CLHEP::cm,DetectorHe3L*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetHe3_log1 = new G4LogicalVolume(DetHe3_solid1,CounterGas,"DetHe3_log1");
+
+    G4VSolid* DetWire_solid1 = new G4Tubs("DetWire_solid1", 0*CLHEP::cm, 0.0025*CLHEP::cm,DetectorWireL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetWire_log1 = new G4LogicalVolume(DetWire_solid1,SS,"DetWire_log1");
+
+    G4VPhysicalVolume* DetTube_phys1 = new G4PVPlacement(0,G4ThreeVector(0,0,-15.61592),DetTube_log1,"DetTube_phys1",DetHolder_log1,0,false,0);
+    G4VPhysicalVolume* DetElec_phys1 = new G4PVPlacement(0,G4ThreeVector(0,0,22.4453),DetElec_log1,"DetElec_phys1",DetTube_log1,0,false,0);
+    G4VPhysicalVolume* DetHe3_phys1 = new G4PVPlacement(0,G4ThreeVector(0,0,-1.74752),DetHe3_log1,"DetHe3_phys1",DetTube_log1,0,false,0);
+    G4VPhysicalVolume* DetWire_phys1 = new G4PVPlacement(0,G4ThreeVector(0,0,0),DetWire_log1,"DetWire_phys1",DetTube_log1,0,false,0);
+
+  //Non-white detector 2
+
+    G4VSolid* DetTube_solid2 = new G4Tubs("DetTube_solid2", 1.18872*CLHEP::cm, 1.27*CLHEP::cm,DetectorTubeL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetTube_log2 = new G4LogicalVolume(DetTube_solid2,Aluminum,"DetTube_log");
+
+    G4VSolid* DetElec_solid2 = new G4Tubs("DetElec_solid2", 0*CLHEP::cm, 1.27*CLHEP::cm,DetectornonwhiteElecL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetElec_log2 = new G4LogicalVolume(DetElec_solid2,Elec,"DetElec_log");
+
+    G4VSolid* DetHe3_solid2 = new G4Tubs("DetHe3_solid2", 0*CLHEP::cm, (1.27-0.08128)*CLHEP::cm,DetectorHe3L*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetHe3_log2 = new G4LogicalVolume(DetHe3_solid2,CounterGas,"DetHe3_log");
+
+    G4VSolid* DetWire_solid2 = new G4Tubs("DetWire_solid2", 0*CLHEP::cm, 0.0025*CLHEP::cm,DetectorWireL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetWire_log2 = new G4LogicalVolume(DetWire_solid2,SS,"DetWire_log");
+
+    G4VPhysicalVolume* DetTube_phys2 = new G4PVPlacement(0,G4ThreeVector(0,0,-15.61592),DetTube_log2,"DetTube_phys2",DetHolder_log2,0,false,0);
+    G4VPhysicalVolume* DetElec_phys2 = new G4PVPlacement(0,G4ThreeVector(0,0,22.4453),DetElec_log2,"DetElec_phys2",DetTube_log2,0,false,0);
+    G4VPhysicalVolume* DetHe3_phys2 = new G4PVPlacement(0,G4ThreeVector(0,0,-1.74752),DetHe3_log2,"DetHe3_phys2",DetTube_log2,0,false,0);
+    G4VPhysicalVolume* DetWire_phys2 = new G4PVPlacement(0,G4ThreeVector(0,0,0),DetWire_log2,"DetWire_phys2",DetTube_log2,0,false,0);
+
+  //Non-white detector 3
+    G4VSolid* DetTube_solid3 = new G4Tubs("DetTube_solid3", 1.18872*CLHEP::cm, 1.27*CLHEP::cm,DetectorTubeL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetTube_log3 = new G4LogicalVolume(DetTube_solid3,Aluminum,"DetTube_log3");
+
+    G4VSolid* DetElec_solid3 = new G4Tubs("DetElec_solid3", 0*CLHEP::cm, 1.27*CLHEP::cm,DetectornonwhiteElecL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetElec_log3 = new G4LogicalVolume(DetElec_solid3,Elec,"DetElec_log3");
+
+    G4VSolid* DetHe3_solid3 = new G4Tubs("DetHe3_solid3", 0*CLHEP::cm, (1.27-0.08128)*CLHEP::cm,DetectorHe3L*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetHe3_log3 = new G4LogicalVolume(DetHe3_solid3,CounterGas,"DetHe3_log3");
+
+    G4VSolid* DetWire_solid3 = new G4Tubs("DetWire_solid3", 0*CLHEP::cm, 0.0025*CLHEP::cm,DetectorWireL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* DetWire_log3 = new G4LogicalVolume(DetWire_solid3,SS,"DetWire_log3");
+
+    G4VPhysicalVolume* DetTube_phys3 = new G4PVPlacement(0,G4ThreeVector(0,0,-15.61592),DetTube_log3,"DetTube_phys3",DetHolder_log3,0,false,0);
+    G4VPhysicalVolume* DetElec_phys3 = new G4PVPlacement(0,G4ThreeVector(0,0,22.4453),DetElec_log3,"DetElec_phys3",DetTube_log3,0,false,0);
+    G4VPhysicalVolume* DetHe3_phys3 = new G4PVPlacement(0,G4ThreeVector(0,0,-1.74752),DetHe3_log3,"DetHe3_phys3",DetTube_log3,0,false,0);
+    G4VPhysicalVolume* DetWire_phys3 = new G4PVPlacement(0,G4ThreeVector(0,0,0),DetWire_log3,"DetWire_phys3",DetTube_log3,0,false,0);
+
+  //White detector
+    G4VSolid* White_DetTube_solid = new G4Tubs("White_DetTube_solid", 1.18872*CLHEP::cm, 1.27*CLHEP::cm,DetectorTubeL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* White_DetTube_log = new G4LogicalVolume(White_DetTube_solid,Aluminum,"White_DetTube_log");
+
+    G4VSolid* White_DetElec_solid = new G4Tubs("White_DetElec_solid", 0*CLHEP::cm, 1.27*CLHEP::cm,DetectorwhiteElecL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* White_DetElec_log = new G4LogicalVolume(White_DetElec_solid,Elec,"White_DetElec_log");
+
+    G4VSolid* White_DetHe3_solid = new G4Tubs("White_DetHe3_solid", 0*CLHEP::cm, (1.27-0.08128)*CLHEP::cm,DetectorHe3L*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* White_DetHe3_log = new G4LogicalVolume(White_DetHe3_solid,CounterGas,"White_DetHe3_log");
+
+    G4VSolid* White_DetWire_solid = new G4Tubs("White_DetWire_solid", 0*CLHEP::cm, 0.0025*CLHEP::cm,DetectorWireL*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* White_DetWire_log = new G4LogicalVolume(White_DetWire_solid,SS,"White_DetWire_log");
+
+    G4VPhysicalVolume* White_DetTube_phys = new G4PVPlacement(0,G4ThreeVector(0,0,-15.61592),White_DetTube_log,"White_DetTube_phys",DetHolder_log4,0,false,0);
+    G4VPhysicalVolume* White_DetElec_phys = new G4PVPlacement(0,G4ThreeVector(0,0,22.4453),White_DetElec_log,"White_DetElec_phys",White_DetTube_log,0,false,0);
+    G4VPhysicalVolume* White_DetHe3_phys = new G4PVPlacement(0,G4ThreeVector(0,0,-1.74752),White_DetHe3_log,"White_DetHe3_phys",White_DetTube_log,0,false,0);
+    G4VPhysicalVolume* White_DetWire_phys = new G4PVPlacement(0,G4ThreeVector(0,0,0),White_DetWire_log,"White_DetWire_phys",White_DetTube_log,0,false,0);
+
+  //Source holder
+    G4VSolid* SourceHolder_solid = new G4Tubs("SourceHolder_solid", (2.69875/2)*CLHEP::cm, 1.5875*CLHEP::cm,91.44/2*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* SourceHolder_log = new G4LogicalVolume(SourceHolder_solid,SS,"SourceHolder_log");
+    G4VPhysicalVolume* SourceHolder_phys = new G4PVPlacement(0,G4ThreeVector(0,0,DetHolderheight),SourceHolder_log,"SourceHolder_phys",Water_log,0,false,0);
+
+  //Source tube pole
+    G4VSolid* SourcePole_solid = new G4Tubs("SourcePole_solid", 0*CLHEP::cm, 0.555625*CLHEP::cm,81.28/2*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* SourcePole_log = new G4LogicalVolume(SourcePole_solid,SS,"SourcePole_log");
+    G4VPhysicalVolume* SourcePole_phys = new G4PVPlacement(0,G4ThreeVector(0,0,43.14),SourcePole_log,"SourcePole_phys",SourceHolder_log,0,false,0);
+    //2.5+40.64 = 43.14
+
+
+  //Source Capsule (Not Done)
+    G4VSolid* SourceCaps_solid = new G4Tubs("SourceCaps_solid", 0*CLHEP::cm, 1.35*CLHEP::cm,2.5*CLHEP::cm,0.*CLHEP::deg,360.*CLHEP::deg);
+    G4LogicalVolume* SourceCaps_log = new G4LogicalVolume(SourceCaps_solid,SS,"SourceCaps_log");
+    G4VPhysicalVolume* SourceCaps_phys = new G4PVPlacement(0,G4ThreeVector(0,0,0),SourceCaps_log,"SourceCaps_phys",SourceHolder_log,0,false,0);
+
+  //pet cylinder
+ // G4VSolid* cylinder_solid = new G4Tubs("cylinder_solid",0*CLHEP::cm,cylinder_radius,cylinder_hheight,0.*CLHEP::deg,360.*CLHEP::deg);
+ // G4LogicalVolume* cylinder_log = new G4LogicalVolume(cylinder_solid,pet,"cylinder_log");
+ // cylinder_phys = new G4PVPlacement(0,G4ThreeVector(0,0,0),cylinder_log,"cylinder_phys",world_log,0,false,0);
+
+  /*G4LogicalVolume *holes_log[4], *tubes_log[4], *counters_log[4];
+
+  G4Box* pet_shape = new G4Box("pet_cube",box_side,box_side,box_height);
+  G4Box* crete_wall1 = new G4Box("crete_wall1",box_side+20,20,box_side+20);
+  G4Box* crete_wall2 = new G4Box("crete_wall2",20,box_side+20,box_side+20);
+  G4Box* crete_floor = new G4Box("crete_floor",box_side+20,box_side+20,20);
+  G4LogicalVolume* pet_log = new G4LogicalVolume(pet_shape,pet,"pet_log");
+  G4LogicalVolume* crete_log1 = new G4LogicalVolume(crete_wall1,concrete,"crete_log1");
+  G4LogicalVolume* crete_log = new G4LogicalVolume(crete_wall2,concrete,"crete_log");
+  G4LogicalVolume* crete_log3 = new G4LogicalVolume(crete_floor,concrete,"crete_log3");
+
+  G4double phi;
+  phi= 25. *CLHEP::deg;
+  G4RotationMatrix rm;
+  rm.rotateZ(phi);
+
+  box_phys = new G4PVPlacement(0,G4ThreeVector(0,0,0),pet_log,"pet_phys",world_log,0,false,0);
+  crete_phys1a = new G4PVPlacement(0,G4ThreeVector(0,box_side+20,0),crete_log1,"crete_phys1a",world_log,0,false,0);
+  crete_phys1b = new G4PVPlacement(0,G4ThreeVector(0,-box_side-20,0),crete_log1,"crete_phys1b",world_log,0,false,0);
+  crete_phys2a = new G4PVPlacement(0,G4ThreeVector(box_side+20,0,0),crete_log,"crete_phys2a",world_log,0,false,0);
+  crete_phys2b = new G4PVPlacement(0,G4ThreeVector(0,-box_side-20,0),crete_log,"crete_phys2b",world_log,0,false,0);
+  crete_phys3 = new G4PVPlacement(0,G4ThreeVector(0,0,-box_side-20),crete_log3,"crete_phys2b",world_log,0,false,0);
+
+  G4Tubs *holes_solid[4], *tubes_solid[4], *counters_solid[4];
+  char name2[100];
+  for(int i=0;i<4;++i) {
+   sprintf(name2,"counter%i_solid",i);
+   counters_solid[i] = new G4Tubs(name2,0.*CLHEP::cm,counter_radius,counter_hheight,0.*CLHEP::deg,360.*CLHEP::deg);
+   sprintf(name2,"tube%i_solid",i);
+   tubes_solid[i] = new G4Tubs(name2,0.*CLHEP::cm,counter_radius+wall_hthick,counter_hheight+wall_hthick,0.*CLHEP::deg,360.*CLHEP::deg);
+   sprintf(name2,"hole%i_solid",i);
+   holes_solid[i] = new G4Tubs(name2,0.*CLHEP::cm,counter_radius+2.*wall_hthick,counter_hheight+2.*wall_hthick,0.*CLHEP::deg,360.*CLHEP::deg);
+
+   sprintf(name2,"conter%i_log",i);
+   counters_log[i] = new G4LogicalVolume(counters_solid[i],CounterGas,name2);
+   sprintf(name2,"tube%i_log",i);
+   tubes_log[i] = new G4LogicalVolume(tubes_solid[i],SS,name2);
+   sprintf(name2,"hole%i_log",i);
+   holes_log[i] = new G4LogicalVolume(holes_solid[i],air,name2);
+
+
+   G4double px = 0.*CLHEP::cm;
+   G4double py = 0.*CLHEP::cm;
+   G4double dist = counter_dist/sqrt(2);
+   if (i == 0) {px = dist; py = dist;}
+   else if (i == 1) {px = dist; py = -dist;}
+   else if (i == 2) {px = -dist; py = dist;}
+   else if (i == 3) {px = -dist; py = -dist;}
+
+   G4double pz = 0.*CLHEP::cm;
+   sprintf(name2,"hole%i_phys",i);
+   holes_phys[i] = new G4PVPlacement(G4Transform3D(rm,G4ThreeVector(px,py,pz)),holes_log[i],name2,pet_log,false,0);
+   sprintf(name2,"tube%i_phys",i);
+   tubes_phys[i] = new G4PVPlacement(G4Transform3D(rm,G4ThreeVector(0,0,0)),tubes_log[i],name2,holes_log[i],false,0);
+   sprintf(name2,"counter%i_phys",i);
+   counters_phys[i] = new G4PVPlacement(G4Transform3D(rm,G4ThreeVector(0,0,0)),counters_log[i],name2,tubes_log[i],false,0);
+ };*/
+
+
+  // Visualization attributes
+   // world_log->SetVisAttributes (G4VisAttributes::Invisible);
+    G4VisAttributes* waterVisAtt = new G4VisAttributes(G4Colour(0, 0, 1));
+    waterVisAtt->SetForceAuxEdgeVisible(true);
+
+    G4VisAttributes* cylinderVisAtt= new G4VisAttributes(G4Colour(0,1,0));
+    cylinderVisAtt->SetForceAuxEdgeVisible(true);
+
+    G4VisAttributes* counterVisAtt= new G4VisAttributes(G4Colour(1,0,0));
+    counterVisAtt->SetForceSolid(true);
+
+    G4VisAttributes* ElecVisAtt= new G4VisAttributes(G4Colour(1,1,0));
+    ElecVisAtt->SetForceSolid(true);
+
+
+
+    Water_log->SetVisAttributes(waterVisAtt);
+
+    DetHolder_log1->SetVisAttributes(cylinderVisAtt);
+    DetHolder_log2->SetVisAttributes(cylinderVisAtt);
+    DetHolder_log3->SetVisAttributes(cylinderVisAtt);
+    DetHolder_log4->SetVisAttributes(cylinderVisAtt);
+
+    DetTube_log1->SetVisAttributes(counterVisAtt);
+    DetTube_log2->SetVisAttributes(counterVisAtt);
+    DetTube_log3->SetVisAttributes(counterVisAtt);
+    White_DetTube_log->SetVisAttributes(counterVisAtt);
+
+    DetElec_log1->SetVisAttributes(ElecVisAtt);
+    DetElec_log2->SetVisAttributes(ElecVisAtt);
+    DetElec_log3->SetVisAttributes(ElecVisAtt);
+    White_DetElec_log->SetVisAttributes(ElecVisAtt);
+
+    DetHe3_log1->SetVisAttributes(G4VisAttributes::Invisible);
+    DetHe3_log2->SetVisAttributes(G4VisAttributes::Invisible);
+    DetHe3_log3->SetVisAttributes(G4VisAttributes::Invisible);
+    White_DetHe3_log->SetVisAttributes(G4VisAttributes::Invisible);
+
+    DetWire_log1->SetVisAttributes(G4VisAttributes::Invisible);
+    DetWire_log2->SetVisAttributes(G4VisAttributes::Invisible);
+    DetWire_log3->SetVisAttributes(G4VisAttributes::Invisible);
+    White_DetWire_log->SetVisAttributes(G4VisAttributes::Invisible);
+
+    SourceHolder_log->SetVisAttributes(counterVisAtt);
+    SourcePole_log->SetVisAttributes(counterVisAtt);
+    SourceCaps_log->SetVisAttributes(counterVisAtt);
+
+
+/*  for(int i=0;i<4;++i) {
+   holes_log[i]->SetVisAttributes(G4VisAttributes::Invisible);
+   tubes_log[i]->SetVisAttributes(counterVisAtt);
+  };
+
+  counters_phys[0]->CheckOverlaps();
+  tubes_phys[0]->CheckOverlaps();
+  holes_phys[0]->CheckOverlaps();
+
+  DetHolder_log1->CheckOverlaps();
+  DetHolder_log2->CheckOverlaps();
+  DetHolder_log3->CheckOverlaps();
+  DetHolder_log4->CheckOverlaps();
+
+  DetTube_log1->CheckOverlaps();
+  DetTube_log2->CheckOverlaps();
+  DetTube_log3->CheckOverlaps();
+  White_DetTube_log->CheckOverlaps();
+
+  DetElec_log1->CheckOverlaps();
+  DetElec_log2->CheckOverlaps();
+  DetElec_log3->CheckOverlaps();
+  White_DetElec_log->CheckOverlaps();
+
+  DetHe3_log1->CheckOverlaps();
+  DetHe3_log2->CheckOverlaps();
+  DetHe3_log3->CheckOverlaps();
+  White_DetHe3_log->CheckOverlaps();
+
+  DetWire_log1->CheckOverlaps();
+  DetWire_log2->CheckOverlaps();
+  DetWire_log3->CheckOverlaps();
+  White_DetWire_log->CheckOverlaps();
+
+  SourceHolder_log->CheckOverlaps();
+  SourcePole_log->CheckOverlaps();
+  SourceCaps_log->CheckOverlaps();*/
+
+  return world_phys;
+}

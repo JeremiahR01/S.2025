@@ -1,0 +1,13 @@
+./build_and_submit.job amli $1 0.0 $2 $3
+./build_and_submit.job amli $1 1.0 $2 $3
+./build_and_submit.job amli $1 2.0 $2 $3
+./build_and_submit.job amli $1 3.0 $2 $3
+./build_and_submit.job amli $1 4.0 $2 $3
+./build_and_submit.job amli $1 5.0 $2 $3
+./build_and_submit.job amli $1 6.0 $2 $3
+./build_and_submit.job amli $1 7.0 $2 $3
+./build_and_submit.job amli $1 8.0 $2 $3
+./build_and_submit.job amli $1 9.0 $2 $3
+./build_and_submit.job amli $1 10.0 $2 $3
+./build_and_submit.job amli $1 11.0 $2 $3
+./build_and_submit.job amli $1 12.0 $2 $3

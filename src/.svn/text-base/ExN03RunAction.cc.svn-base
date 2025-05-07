@@ -1,0 +1,87 @@
+#include "ExN03RunAction.hh"
+
+#include "G4Run.hh"
+#include "G4RunManager.hh"
+#include "G4UnitsTable.hh"
+
+#include <vector>
+
+
+#include <TFile.h>
+#include <TTree.h>
+#include <TString.h>
+
+ExN03RunAction::ExN03RunAction()
+{
+ out = new TFile("out.root","RECREATE");
+ 
+ t = new TTree("t","tree");
+ t->Branch("ECyl",&ECyl,"ECyl/D");
+ t->Branch("Eholes",Eholes,"Eholes[4]/D");
+ t->Branch("Etubes",Etubes,"Eholes[4]/D");
+ t->Branch("Ecounters",Ecounters,"Ecounters[4]/D");
+ t->Branch("EventID",&EventID,"EventID/I");
+ t->Branch("procArr",&procArr,"procArr/I");
+ t->Branch("pnameArr",&pnameArr,"pnameArr/I");
+ t->Branch("EstepArr",&EstepArr,"EstepArr/I");
+ t->Branch("np",&np,"np/I");
+ t->Branch("x0",x0,"x0[3]/D");
+ t->Branch("E0",&E0,"E0/D");
+ t->Branch("nsec",&nsec,"nsec/I");
+
+}
+  
+
+ExN03RunAction::~ExN03RunAction()
+{
+ out->cd();
+ t->Write();
+ out->Close();
+
+}
+
+
+
+void ExN03RunAction::BeginOfRunAction(const G4Run* aRun)
+{ 
+  G4cout << "### Run " << aRun->GetRunID() << " start." << G4endl;
+
+  //inform the runManager to save random number seed
+  G4RunManager::GetRunManager()->SetRandomNumberStore(false);
+
+}
+
+
+
+void ExN03RunAction::fillPerEvent(G4double _ECyl,std::vector<G4double> Evol,G4int evtn,std::vector<TString> p,std::vector<TString> c,std::vector<G4double> e,G4int n,G4double x[3],G4double e0,G4int ns)
+{
+ ECyl = _ECyl;
+ for(int i=0;i<4;++i) {
+  Eholes[i] = Evol.at(i*3);
+  Etubes[i] = Evol.at(i*3+1);
+  Ecounters[i] = Evol.at(i*3+2);
+ };
+ EventID=evtn;
+ procArr=p;
+ pnameArr = c;
+ EstepArr = e;
+ np = n;
+ x0[0]=x[0];x0[1]=x[1];x0[2]=x[2];
+ E0=e0;
+ nsec=ns;
+
+ t->Fill();
+}
+
+
+
+void ExN03RunAction::EndOfRunAction(const G4Run* aRun)
+{
+
+ out->cd();
+ t->Write();
+ out->Close();
+
+}
+
+

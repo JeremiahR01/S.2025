@@ -1,0 +1,56 @@
+#ifndef ExN03RunAction_h
+#define ExN03RunAction_h 1
+
+#include "G4UserRunAction.hh"
+#include "globals.hh"
+
+#include <vector>
+#include <TString.h>
+#include <TTree.h>
+#include <TFile.h>
+
+class G4Run;
+class TTree;
+class TFile;
+
+class ExN03RunAction : public G4UserRunAction
+{
+public:
+  ExN03RunAction();
+  virtual ~ExN03RunAction();
+
+  void BeginOfRunAction(const G4Run*);
+  void EndOfRunAction(const G4Run*);
+    
+  void fillPerEvent(G4double _ECyl, std::vector<G4double> Evol,G4int evtn,std::vector<TString> p,std::vector<TString> c,std::vector<G4double> e,G4int n,G4double x[3],G4double E0, G4int ns); 
+
+private:
+
+  TFile *out; 
+  TTree *t; 
+  
+  G4double ECyl;
+  G4double Eholes[4];
+  G4double Etubes[4];
+  G4double Ecounters[4];
+  G4int    EventID;
+
+  std::vector<TString> procArr; 
+  std::vector<TString> pnameArr; //array of particle names along the track
+  std::vector<G4double> EstepArr; //array of deposited energies per step
+  G4int nsec; //number of secondaries
+
+  G4int np;//is He3(n,p)H2 ? 
+
+  G4double x0[3]; //primary vertex
+  G4double E0;
+
+ 
+
+    
+ 
+};
+
+
+#endif
+

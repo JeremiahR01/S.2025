@@ -1,0 +1,26 @@
+
+**************************************************************
+ Geant4 version Name: geant4-10-04-patch-02    (25-May-2018)
+                       Copyright : Geant4 Collaboration
+                      References : NIM A 506 (2003), 250-303
+                                 : IEEE-TNS 53 (2006), 270-278
+                                 : NIM A 835 (2016), 186-225
+                             WWW : http://geant4.org/
+**************************************************************
+
+<<< Geant4 Physics List simulation engine: QGSP_BERT_HP 3.0
+
+
+
+-------- EEEE ------- G4Exception-START -------- EEEE -------
+*** G4Exception : Event0201
+      issued by : G4HEPEvtInterface::G4HEPEvtInterface
+G4HEPEvtInterface:: cannot open file.
+*** Fatal Exception *** core dump ***
+ **** Track information is not available at this moment
+ **** Step information is not available at this moment
+
+-------- EEEE -------- G4Exception-END --------- EEEE -------
+
+
+*** G4Exception: Aborting execution ***

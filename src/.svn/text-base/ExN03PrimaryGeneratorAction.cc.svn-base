@@ -1,0 +1,91 @@
+#include "ExN03PrimaryGeneratorAction.hh"
+#include "ExN03PrimaryGeneratorMessenger.hh"
+#include "ExN03DetectorConstruction.hh"
+#include <math.h>
+#include "G4Event.hh"
+#include "G4ParticleGun.hh"
+#include "G4ParticleTable.hh"
+#include "G4ParticleDefinition.hh"
+#include "Randomize.hh"
+
+
+ExN03PrimaryGeneratorAction::ExN03PrimaryGeneratorAction(ExN03DetectorConstruction* ExN03DC)
+:ExN03Detector(ExN03DC),posFlag("off"),dirFlag("off"),bkgFlag("off")
+{
+  G4int n_particle = 1;
+  particleGun  = new G4ParticleGun(n_particle);
+  
+  gunMessenger = new ExN03PrimaryGeneratorMessenger(this);
+
+  // default particle kinematic
+  G4ParticleTable* particleTable = G4ParticleTable::GetParticleTable();
+  G4String pname;
+  G4ParticleDefinition* particle = particleTable->FindParticle(pname="e-");
+  particleGun->SetParticleDefinition(particle);
+  
+  particleGun->SetParticleMomentumDirection(G4ThreeVector(0,0,1));
+
+  particleGun->SetParticleEnergy(1.*MeV);
+
+  particleGun->SetParticlePosition(G4ThreeVector(0.*cm,0.*cm,0.*cm));
+
+}
+
+ExN03PrimaryGeneratorAction::~ExN03PrimaryGeneratorAction()
+{
+  delete particleGun;
+  delete gunMessenger;
+}
+
+
+void ExN03PrimaryGeneratorAction::GeneratePrimaries(G4Event* anEvent)
+{
+  //this function is called at the begining of event
+   
+  if(dirFlag=="on") {
+   G4double px = 2.*(G4UniformRand()-0.5);
+   G4double py = 2.*(G4UniformRand()-0.5);
+   G4double pz = 2.*(G4UniformRand()-0.5);
+   particleGun->SetParticleMomentumDirection(G4ThreeVector(px,py,pz));
+  };
+  if(posFlag=="on") {
+   G4double x = 2.*ExN03Detector->GetWorldSize()*(G4UniformRand()-0.5);
+   G4double y = 2.*ExN03Detector->GetWorldSize()*(G4UniformRand()-0.5);
+   G4double z = 2.*ExN03Detector->GetWorldSize()*(G4UniformRand()-0.5);
+   particleGun->SetParticlePosition(G4ThreeVector(x,y,z));
+  };
+  if(bkgFlag!="off") {
+   G4double rho;
+   G4double pi = 3.14159265;
+   G4double phi;
+   G4double theta;
+   rho = ExN03Detector->GetWorldSize()-ExN03Detector->GetWorldSize()*.25*G4UniformRand();
+   theta = G4UniformRand()*pi;
+   phi = G4UniformRand()*pi*2.;
+   double x = rho*sin(theta)*cos(phi);
+   double y = rho*sin(theta)*sin(phi);
+   double z = rho*cos(theta);
+
+   double tgtx;
+   double tgty;
+   double tgtz;
+   std::istringstream is(bkgFlag);
+   is >> tgtx >> tgty >> tgtz;
+   G4ThreeVector tgtPos = G4ThreeVector(tgtx,tgty,tgtz);
+   double result;
+   double action;
+   action = 5.65;
+   result = pow(action, .5);
+   G4double tgtDist = pow((pow(x-tgtPos.getX(),2)+pow(y-tgtPos.getY(),2)+pow(z-tgtPos.getZ(),2)),.5);
+   G4ThreeVector tgtDir;
+   tgtDir = G4ThreeVector((x-tgtPos.getX())/tgtDist,(y-tgtPos.getY())/tgtDist,(z-tgtPos.getZ())/tgtDist);
+  
+   particleGun->SetParticlePosition(G4ThreeVector(x,y,z));
+   particleGun->SetParticleMomentumDirection(tgtDir);
+   };
+
+  particleGun->GeneratePrimaryVertex(anEvent);
+}
+
+
+

@@ -1,0 +1,227 @@
+#include "ExN03DetectorConstruction.hh"
+
+#include <fstream>
+using namespace std;
+
+#include "G4Material.hh"
+#include "G4Element.hh"
+#include "G4Isotope.hh"
+
+#include "G4Box.hh"
+#include "G4LogicalVolume.hh"
+#include "G4PVPlacement.hh"
+#include "G4VPhysicalVolume.hh"
+#include "G4Tubs.hh"
+
+#include "G4Transform3D.hh"
+#include "G4GeometryManager.hh"
+#include "G4PhysicalVolumeStore.hh"
+#include "G4LogicalVolumeStore.hh"
+#include "G4SolidStore.hh"
+
+#include "G4VisAttributes.hh"
+#include "G4Colour.hh"
+#include "G4NistManager.hh"
+#include <vector>
+
+ExN03DetectorConstruction::ExN03DetectorConstruction() 
+{
+ world_phys=0;
+ box_phys=0;
+ crete_phys1a=0;
+ crete_phys1b=0;
+ crete_phys2a=0;
+ crete_phys2b=0;
+ crete_phys3=0;
+ for(int i=0;i<4;++i) {
+  holes_phys[i]=0;
+  tubes_phys[i]=0;
+  counters_phys[i]=0;
+ };
+
+ worldsize=.5*m;
+}
+ 
+ExN03DetectorConstruction::~ExN03DetectorConstruction() {}
+
+
+
+G4VPhysicalVolume* ExN03DetectorConstruction::Construct()
+{
+  return ConstructCounter();
+}
+
+
+
+G4VPhysicalVolume* ExN03DetectorConstruction::ConstructCounter()
+{
+
+  // Clean old geometry, if any
+  //
+  G4GeometryManager::GetInstance()->OpenGeometry();
+  G4PhysicalVolumeStore::GetInstance()->Clean();
+  G4LogicalVolumeStore::GetInstance()->Clean();
+  G4SolidStore::GetInstance()->Clean();
+
+  // Import detector geometry and fill gas specifications
+  ///////////////////////////////////////////////////////////
+  ifstream geometry("geometry.dat");
+  G4double boxh,countr,counth,countd,boxs,He3Pressure,CounterVolume,He3Moles,He3Density,R,pi;
+
+  R = 0.08206;
+  pi = 3.141596; 
+  geometry >> boxh;
+  geometry >> boxs;
+  geometry >> countd;
+  geometry >> countr;
+  geometry >> counth;
+  geometry >> He3Pressure;
+  // Calculate necessary parameters -- units are Liters and Atmospheres
+  ////////////////////////////////////////////////////////////////////////
+
+  CounterVolume = pi*pow(countr,2)*counth*1000;
+  He3Moles = He3Pressure*CounterVolume/(R*298);
+  He3Density = He3Pressure*1000*3.016/(R*298);
+  cout<<He3Density<<endl;
+
+
+  //make materials
+  ///////////////////////////////////////////////////////////
+  G4int nelements;
+  G4double density,a,z;
+  G4String name,symbol;
+ 
+
+  G4NistManager* man = G4NistManager::Instance();
+  //Air
+  G4Material* air = man->FindOrBuildMaterial("G4_AIR");
+  //PET
+  G4Material* pet = man->FindOrBuildMaterial("G4_POLYETHYLENE");
+  //Concrete
+  G4Material* concrete =  man->FindOrBuildMaterial("G4_CONCRETE");
+
+  // He3
+  a=3.0160293*g/mole;
+  G4Isotope* He3 = new G4Isotope(name="He3",2,3,a);
+  G4Element* myHe = new G4Element(name="myHe",symbol="myHe",nelements=1);
+  myHe->AddIsotope(He3,100.*perCent);
+  
+  // Mixed product -- Fill + He3
+  G4Material* CounterGas = new G4Material(name="CounterGas",density=He3Density*g/m3,nelements=1,kStateGas,298.*kelvin,He3Pressure*atmosphere);
+  CounterGas->AddElement(myHe,100*perCent);
+
+  //SS for the tube walls
+  G4Element* Fe = new G4Element(name="Iron",symbol="Fe",z=26,a=55.845*g/mole);
+  G4Element* Ni = new G4Element(name="Nickel",symbol="Ni",28,58.693*g/mole);   
+  G4Element* Cr = new G4Element(name="Chromium",symbol="Cr",24,51.996*g/mole);
+  G4Material* SS = new G4Material(name="Stainless",density=7.87*g/cm3,nelements=3);
+  SS->AddElement(Fe,71.*perCent);
+  SS->AddElement(Cr,19.*perCent);
+  SS->AddElement(Ni,10.*perCent);
+  /////////////////////////////////////////////////////////////
+
+
+  //make objects
+  //////////////////////////////////////////////////////////////
+  //world 
+  G4Box* world_solid = new G4Box("world_solid",worldsize,worldsize,worldsize);
+  G4LogicalVolume* world_log = new G4LogicalVolume(world_solid,air,"world_log");
+  world_phys = new G4PVPlacement(0,G4ThreeVector(0,0,0),world_log,"world_phys",0,false,0);
+   
+  // Detector Dimensions imported above
+  G4double box_height = boxh*cm;
+  G4double box_side = boxs*cm;
+  G4double wall_hthick = 0.5*mm;
+  G4double counter_radius = countr*cm;
+  G4double counter_hheight = counth*cm;
+  G4double counter_dist = countd*cm;
+
+  //pet cylinder
+ // G4Tubs* cylinder_solid = new G4Tubs("cylinder_solid",0*cm,cylinder_radius,cylinder_hheight,0.*deg,360.*deg);
+ // G4LogicalVolume* cylinder_log = new G4LogicalVolume(cylinder_solid,pet,"cylinder_log");
+ // cylinder_phys = new G4PVPlacement(0,G4ThreeVector(0,0,0),cylinder_log,"cylinder_phys",world_log,0,false,0);
+  
+  G4LogicalVolume *holes_log[4], *tubes_log[4], *counters_log[4];
+  
+  G4Box* pet_shape = new G4Box("pet_cube",box_side,box_side,box_height); 
+  G4Box* crete_wall1 = new G4Box("crete_wall1",box_side+20,20,box_side+20);
+  G4Box* crete_wall2 = new G4Box("crete_wall2",20,box_side+20,box_side+20);
+  G4Box* crete_floor = new G4Box("crete_floor",box_side+20,box_side+20,20);
+  G4LogicalVolume* pet_log = new G4LogicalVolume(pet_shape,pet,"pet_log");
+  G4LogicalVolume* crete_log1 = new G4LogicalVolume(crete_wall1,concrete,"crete_log1");
+  G4LogicalVolume* crete_log2 = new G4LogicalVolume(crete_wall2,concrete,"crete_log2");
+  G4LogicalVolume* crete_log3 = new G4LogicalVolume(crete_floor,concrete,"crete_log3");
+  
+  G4double phi;
+  phi= 25. *deg;
+  G4RotationMatrix rm;
+  rm.rotateZ(phi);
+
+  box_phys = new G4PVPlacement(0,G4ThreeVector(0,0,0),pet_log,"pet_phys",world_log,0,false,0);
+  crete_phys1a = new G4PVPlacement(0,G4ThreeVector(0,box_side+20,0),crete_log1,"crete_phys1a",world_log,0,false,0);
+  crete_phys1b = new G4PVPlacement(0,G4ThreeVector(0,-box_side-20,0),crete_log1,"crete_phys1b",world_log,0,false,0);
+  crete_phys2a = new G4PVPlacement(0,G4ThreeVector(box_side+20,0,0),crete_log2,"crete_phys2a",world_log,0,false,0);
+  crete_phys2b = new G4PVPlacement(0,G4ThreeVector(0,-box_side-20,0),crete_log2,"crete_phys2b",world_log,0,false,0);
+  crete_phys3 = new G4PVPlacement(0,G4ThreeVector(0,0,-box_side-20),crete_log3,"crete_phys2b",world_log,0,false,0);
+
+  G4Tubs *holes_solid[4], *tubes_solid[4], *counters_solid[4];
+  char name2[100];
+  for(int i=0;i<4;++i) {
+   sprintf(name2,"counter%i_solid",i);
+   counters_solid[i] = new G4Tubs(name2,0.*cm,counter_radius,counter_hheight,0.*deg,360.*deg);
+   sprintf(name2,"tube%i_solid",i);
+   tubes_solid[i] = new G4Tubs(name2,0.*cm,counter_radius+wall_hthick,counter_hheight+wall_hthick,0.*deg,360.*deg);
+   sprintf(name2,"hole%i_solid",i);
+   holes_solid[i] = new G4Tubs(name2,0.*cm,counter_radius+2.*wall_hthick,counter_hheight+2.*wall_hthick,0.*deg,360.*deg);
+  
+   sprintf(name2,"conter%i_log",i);
+   counters_log[i] = new G4LogicalVolume(counters_solid[i],CounterGas,name2);
+   sprintf(name2,"tube%i_log",i);
+   tubes_log[i] = new G4LogicalVolume(tubes_solid[i],SS,name2);
+   sprintf(name2,"hole%i_log",i);
+   holes_log[i] = new G4LogicalVolume(holes_solid[i],air,name2);
+
+  
+   G4double px = 0.*cm;
+   G4double py = 0.*cm;
+   G4double dist = counter_dist/sqrt(2);
+   if (i == 0) {px = dist; py = dist;}
+   else if (i == 1) {px = dist; py = -dist;}
+   else if (i == 2) {px = -dist; py = dist;}
+   else if (i == 3) {px = -dist; py = -dist;}
+     
+   G4double pz = 0.*cm;
+   sprintf(name2,"hole%i_phys",i);
+   holes_phys[i] = new G4PVPlacement(G4Transform3D(rm,G4ThreeVector(px,py,pz)),holes_log[i],name2,pet_log,false,0);
+   sprintf(name2,"tube%i_phys",i);
+   tubes_phys[i] = new G4PVPlacement(G4Transform3D(rm,G4ThreeVector(0,0,0)),tubes_log[i],name2,holes_log[i],false,0);
+   sprintf(name2,"counter%i_phys",i);
+   counters_phys[i] = new G4PVPlacement(G4Transform3D(rm,G4ThreeVector(0,0,0)),counters_log[i],name2,tubes_log[i],false,0);
+ };
+
+
+  // Visualization attributes
+  world_log->SetVisAttributes (G4VisAttributes::Invisible);
+
+  G4VisAttributes* cylinderVisAtt= new G4VisAttributes(G4Colour(1,1,1,0.02));
+  cylinderVisAtt->SetVisibility(true);
+
+  G4VisAttributes* counterVisAtt= new G4VisAttributes(G4Colour(1.0,1.0,1.0));
+  counterVisAtt->SetVisibility(true);
+  pet_log->SetVisAttributes(counterVisAtt);
+  crete_log1->SetVisAttributes(counterVisAtt);
+  crete_log2->SetVisAttributes(counterVisAtt);
+  crete_log3->SetVisAttributes(counterVisAtt);
+  for(int i=0;i<4;++i) {
+   holes_log[i]->SetVisAttributes(G4VisAttributes::Invisible);
+   tubes_log[i]->SetVisAttributes(counterVisAtt);
+  };
+
+  counters_phys[0]->CheckOverlaps();
+  tubes_phys[0]->CheckOverlaps();
+  holes_phys[0]->CheckOverlaps();
+
+  return world_phys;
+}
+
+

@@ -1,0 +1,27 @@
+# arguments 
+# 1) generator name, either ambe, amli, or Cf252
+# 2) source position
+# 3) detector position
+# 4) pile-up time cut
+# 5) version label
+#
+cd /mnt/raid5/users/busenitz/he3/exclude-from-backup
+mkdir -p $1_$2_$3_$4_$5
+cd $1_$2_$3_$4_$5
+rm *
+cp ../batch.mac .
+cp ../amli_spectrum.dat .
+echo $2 >geometry.dat
+echo $3 >>geometry.dat
+echo $4 >>geometry.dat
+cat geometry.dat
+echo cd /mnt/raid5/users/busenitz/he3/exclude-from-backup/$1_$2_$3_$4_$5 >batch.job
+echo source /usr/local/geant4.10.04.p02/share/Geant4-10.4.2/geant4make/geant4make.sh >>batch.job
+echo source /usr/local/geant4.10.04.p02/bin/geant4.sh >> batch.job
+echo "/home/busenitz/lz/AmLi/simulation/detector/he3/generator/$1.exe 500000 >generator.data" >>batch.job
+echo "/home/busenitz/lz/AmLi/simulation/detector/he3/generator/correct_neutron_mass.exe >test.data" >>batch.job
+echo "mv test.data generator.data" >>batch.job
+echo he3 batch.mac >> batch.job
+chmod 755 batch.job
+qsub -q long batch.job
+# time ./batch.job

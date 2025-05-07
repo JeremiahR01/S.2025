@@ -1,0 +1,78 @@
+#include "ExN03SteppingAction.hh"
+
+#include "ExN03DetectorConstruction.hh"
+#include "ExN03EventAction.hh"
+
+#include "G4Step.hh"
+#include "G4Track.hh"
+#include "G4VProcess.hh"
+#include "G4TrackVector.hh"
+
+
+ExN03SteppingAction::ExN03SteppingAction(ExN03DetectorConstruction* det,
+                                         ExN03EventAction* evt)
+:detector(det), eventaction(evt)					 
+{ }
+
+
+
+ExN03SteppingAction::~ExN03SteppingAction()
+{ }
+
+
+
+void ExN03SteppingAction::UserSteppingAction(const G4Step* aStep)
+{
+  G4VPhysicalVolume* volume = aStep->GetPreStepPoint()->GetTouchableHandle()->GetVolume();
+  //removed "const" from before the following line in an attempt to fix errors
+  G4Track* track = aStep->GetTrack();
+  const G4VProcess* pr = track->GetCreatorProcess();
+  
+  G4String pN = track->GetDefinition()->GetParticleName();
+  G4double edep = aStep->GetTotalEnergyDeposit();
+
+
+  if(track->GetParentID()==0) {//primary
+   G4double x[3];
+   x0[0] = track->GetVertexPosition().x()/CLHEP::mm;
+   x0[1] = track->GetVertexPosition().y()/CLHEP::mm;
+   x0[2] = track->GetVertexPosition().z()/CLHEP::mm;
+   //   eventaction->SetX0(x);
+   if(track->GetCurrentStepNumber()==1) {
+    G4double E0 = (track->GetVertexKineticEnergy())/CLHEP::MeV;
+    //    eventaction->SetE0(E0);
+   };
+  }; 
+
+  
+  // if(pr)
+  //  {
+  //   const G4String proc = pr->GetProcessName();
+  //   //only store "interesting" processes
+  //   if( (!strcmp(proc.data(),"NeutronInelastic"))||(!strcmp(proc.data(),"nCapture")) ) {
+  //    if(track->GetCurrentStepNumber()==1) {
+  //     G4double ke = track->GetVertexKineticEnergy()/CLHEP::MeV;
+  //     eventaction->AddProc(proc);
+  //     eventaction->AddEstep(ke);//not really, but would do for now
+  //     eventaction->AddPname(pN);
+  //    };
+  //   };
+  // };
+ 
+  if(edep > 0.){
+    if(volume->GetName() == "DetHe3_phys1") Ecounters[0]=Ecounters[0]+edep;
+    if(volume->GetName() == "DetHe3_phys2") Ecounters[1]=Ecounters[1]+edep;
+    if(volume->GetName() == "DetHe3_phys3") Ecounters[2]=Ecounters[2]+edep;
+    if(volume->GetName() == "White_DetHe3_phys") Ecounters[3]=Ecounters[3]+edep;
+  }
+ //tried adding the following to fix crash:
+//if(!track->GetNextVolume()){
+	
+  //track->SetTrackStatus(fStopAndKill);
+	//cout << "particle almost goes out of the world volume, klilled." << endl;
+	//getchar();
+	//}  
+  
+}
+
+
